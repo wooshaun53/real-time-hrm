@@ -220,6 +220,64 @@ src/
 3. Run `npm run test:run` and confirm all tests are green
 4. Open a pull request
 
+## Session Files — Automatic Saving
+
+When you disconnect your device, the dashboard automatically saves two files to the folder you chose at the start of the session.
+
+### How it works
+
+1. **After Bluetooth connects**, a folder picker appears — choose where you want your files saved
+2. **While the session runs**, every debug log entry is written to the log file in real time
+3. **When you disconnect**, the complete session JSON is written and both files are closed
+
+If you skip the folder picker (cancel it), the files are downloaded to your browser's Downloads folder instead when you disconnect.
+
+### Session JSON — `hrm-session-TIMESTAMP.json`
+
+Contains the full session in structured JSON:
+
+```json
+{
+  "session": {
+    "device": "Decathlon HRM",
+    "startedAt": "2026-05-01T10:00:00.000Z",
+    "durationSeconds": 3600,
+    "totalReadings": 3597
+  },
+  "stats": {
+    "max": 172,
+    "min": 58,
+    "avg": 134
+  },
+  "readings": [
+    { "ts": "2026-05-01T10:00:01.000Z", "bpm": 62 },
+    { "ts": "2026-05-01T10:00:02.000Z", "bpm": 65 }
+  ]
+}
+```
+
+### Debug Log — `hrm-debug-TIMESTAMP.log`
+
+A plain text file with every connection event, written in real time as the session runs:
+
+```
+[10:00:00] [ok] Web Bluetooth available — ready to connect
+[10:00:03] [info] Requesting Bluetooth device...
+[10:00:07] [ok] Device selected: "Decathlon HRM"
+[10:00:07] [ok] GATT server connected
+...
+[10:30:00] [warn] Device disconnected
+[10:30:00] [ok] Session written: hrm-session-2026-05-01T10-00-00.json (1797 readings)
+```
+
+### Why not save on every heartbeat?
+
+Browsers cannot write to files continuously without the File System Access API and an open writable stream. The debug log uses exactly this — each entry is streamed to disk immediately. The session JSON is written as one complete file at the end because JSON requires a valid closing structure; writing partial JSON on every reading would produce an unreadable file.
+
+**Memory:** Heart rate data is held in memory during the session (~300 bytes per reading). A 1-hour workout at 1 reading/second uses approximately 1 MB — negligible.
+
+---
+
 ## Privacy
 
-All data stays on your machine. The dashboard has no server, makes no network requests, and does not store anything beyond your current browser session. Closing the tab clears everything.
+All data stays on your machine. The dashboard has no server and makes no network requests. Files are written only to the folder you explicitly choose — nothing is sent anywhere.

@@ -54,3 +54,30 @@ export function buildRequestOptions(scanAll) {
   }
   return { filters: [{ services: ['heart_rate'] }] }
 }
+
+// Cycle 8 — formatLogLine
+export function formatLogLine(time, type, msg) {
+  return `[${time}] [${type}] ${msg}\n`
+}
+
+// Cycle 7 — buildSessionExport
+export function buildSessionExport(readings, stats, deviceName, startedAt) {
+  const durationSeconds = readings.length >= 2
+    ? Math.round((readings[readings.length - 1].ts - readings[0].ts) / 1000)
+    : 0
+
+  return {
+    session: {
+      device: deviceName,
+      startedAt: startedAt.toISOString(),
+      durationSeconds,
+      totalReadings: readings.length,
+    },
+    stats: {
+      max: stats.max,
+      min: stats.min,
+      avg: stats.avg,
+    },
+    readings: readings.map(r => ({ ts: r.ts.toISOString(), bpm: r.bpm })),
+  }
+}

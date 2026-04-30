@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseBpm, getZone, updateStats, formatDuration, filterReadings, buildRequestOptions } from './hrm.js'
+import { parseBpm, getZone, updateStats, formatDuration, filterReadings, buildRequestOptions, buildSessionExport, formatLogLine } from './hrm.js'
 
 // Cycle 1 — parseBpm
 describe('parseBpm', () => {
@@ -174,5 +174,70 @@ describe('buildRequestOptions', () => {
 
     const optsAll = buildRequestOptions(true)
     expect(optsAll.filters).toBeUndefined()
+  })
+})
+
+// Cycle 7 — buildSessionExport
+describe('buildSessionExport', () => {
+  const startedAt = new Date('2026-05-01T10:00:00.000Z')
+  const readings = [
+    { bpm: 80, ts: new Date('2026-05-01T10:00:01.000Z') },
+    { bpm: 100, ts: new Date('2026-05-01T10:00:02.000Z') },
+    { bpm: 60, ts: new Date('2026-05-01T10:00:03.000Z') },
+  ]
+  const stats = { max: 100, min: 60, avg: 80, sum: 240, count: 3 }
+
+  it('includes session metadata', () => {
+    const out = buildSessionExport(readings, stats, 'Test HRM', startedAt)
+    expect(out.session.device).toBe('Test HRM')
+    expect(out.session.startedAt).toBe('2026-05-01T10:00:00.000Z')
+    expect(out.session.totalReadings).toBe(3)
+  })
+
+  it('calculates duration in seconds from first to last reading', () => {
+    const out = buildSessionExport(readings, stats, 'Test HRM', startedAt)
+    expect(out.session.durationSeconds).toBe(2) // 10:00:03 - 10:00:01
+  })
+
+  it('includes stats summary', () => {
+    const out = buildSessionExport(readings, stats, 'Test HRM', startedAt)
+    expect(out.stats.max).toBe(100)
+    expect(out.stats.min).toBe(60)
+    expect(out.stats.avg).toBe(80)
+  })
+
+  it('maps readings to { ts, bpm } with ISO timestamp strings', () => {
+    const out = buildSessionExport(readings, stats, 'Test HRM', startedAt)
+    expect(out.readings).toHaveLength(3)
+    expect(out.readings[0]).toEqual({
+      ts: '2026-05-01T10:00:01.000Z',
+      bpm: 80,
+    })
+  })
+
+  it('returns empty readings array when no readings recorded', () => {
+    const emptyStats = { max: null, min: null, avg: null, sum: 0, count: 0 }
+    const out = buildSessionExport([], emptyStats, 'Test HRM', startedAt)
+    expect(out.readings).toEqual([])
+    expect(out.session.durationSeconds).toBe(0)
+  })
+})
+
+// Cycle 8 — formatLogLine
+describe('formatLogLine', () => {
+  it('formats a line with time, type, and message', () => {
+    const line = formatLogLine('10:00:01', 'ok', 'Connected')
+    expect(line).toBe('[10:00:01] [ok] Connected\n')
+  })
+
+  it('works for all log types', () => {
+    expect(formatLogLine('09:00:00', 'info', 'Scanning...')).toBe('[09:00:00] [info] Scanning...\n')
+    expect(formatLogLine('09:00:01', 'err',  'Failed')).toBe('[09:00:01] [err] Failed\n')
+    expect(formatLogLine('09:00:02', 'warn', 'Disconnected')).toBe('[09:00:02] [warn] Disconnected\n')
+  })
+
+  it('ends with a newline so entries stack correctly in the file', () => {
+    const line = formatLogLine('10:00:00', 'info', 'test')
+    expect(line.endsWith('\n')).toBe(true)
   })
 })

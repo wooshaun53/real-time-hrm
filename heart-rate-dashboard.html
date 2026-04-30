@@ -685,6 +685,37 @@ function buildRequestOptions(scanAll) {
   return { filters: [{ services: ['heart_rate'] }] }
 }
 
+function buildSessionExport(readings, stats, deviceName, startedAt) {
+  const durationSeconds = readings.length >= 2
+    ? Math.round((readings[readings.length - 1].ts - readings[0].ts) / 1000)
+    : 0
+  return {
+    session: {
+      device: deviceName,
+      startedAt: startedAt.toISOString(),
+      durationSeconds,
+      totalReadings: readings.length,
+    },
+    stats: { max: stats.max, min: stats.min, avg: stats.avg },
+    readings: readings.map(r => ({ ts: r.ts.toISOString(), bpm: r.bpm })),
+  }
+}
+
+function formatLogLine(time, type, msg) {
+  return `[${time}] [${type}] ${msg}\n`
+}
+
+// Fallback: trigger a browser download when FSAA is unavailable or declined
+function downloadFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 let readings = []
 let stats = { max: null, min: null, sum: 0, count: 0, avg: null }
@@ -694,6 +725,11 @@ let activeRange = 60
 let chart = null
 let device = null
 let characteristic = null
+
+// File System Access API handles (null = FSAA unavailable or user declined)
+let sessionFileWritable = null
+let debugFileWritable   = null
+let fsaaTimestamp       = null  // shared timestamp for both filenames
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
 const bpmDisplay    = document.getElementById('bpm-display')
@@ -719,6 +755,37 @@ const noBlebanner   = document.getElementById('no-ble-banner')
 const debugLog      = document.getElementById('debug-log')
 const btnClearLog   = document.getElementById('btn-clear-log')
 
+// ── File System Access API ─────────────────────────────────────────────────
+async function initFsaa(deviceLabel) {
+  if (!window.showDirectoryPicker) return  // API not available (shouldn't happen in Chrome/Edge)
+  try {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    fsaaTimestamp = ts
+    const dir = await window.showDirectoryPicker({ mode: 'readwrite' })
+
+    const sessionHandle = await dir.getFileHandle(`hrm-session-${ts}.json`, { create: true })
+    sessionFileWritable = await sessionHandle.createWritable()
+
+    const debugHandle = await dir.getFileHandle(`hrm-debug-${ts}.log`, { create: true })
+    debugFileWritable = await debugHandle.createWritable()
+
+    dbg(`Saving to folder — session: hrm-session-${ts}.json | log: hrm-debug-${ts}.log`, 'ok')
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      dbg('Folder picker cancelled — files will download on disconnect instead', 'warn')
+    } else {
+      dbg(`FSAA error: ${err.message} — falling back to download`, 'warn')
+    }
+  }
+}
+
+async function closeFsaaWritables() {
+  try { if (sessionFileWritable) await sessionFileWritable.close() } catch (_) {}
+  try { if (debugFileWritable)   await debugFileWritable.close()   } catch (_) {}
+  sessionFileWritable = null
+  debugFileWritable   = null
+}
+
 // ── Debug logger ───────────────────────────────────────────────────────────
 function dbg(msg, type = 'info') {
   const time = new Date().toLocaleTimeString('en-GB', { hour12: false })
@@ -728,6 +795,11 @@ function dbg(msg, type = 'info') {
   debugLog.appendChild(entry)
   debugLog.scrollTop = debugLog.scrollHeight
   console.log(`[HRM ${type}] ${msg}`)
+
+  // Write to log file in real-time if FSAA stream is open
+  if (debugFileWritable) {
+    debugFileWritable.write(formatLogLine(time, type, msg)).catch(() => {})
+  }
 }
 
 btnClearLog.addEventListener('click', () => { debugLog.innerHTML = '' })
@@ -911,6 +983,7 @@ async function connect(scanAll = false) {
     dbg('Notifications started — waiting for BPM data', 'ok')
 
     setConnected(device.name || 'Unknown Device')
+    await initFsaa(device.name || 'Unknown Device')
 
   } catch (err) {
     btnConnect.disabled = false
@@ -934,8 +1007,34 @@ function setConnected(name) {
   deviceName.textContent = name
 }
 
-function onDisconnected() {
+async function saveFiles() {
+  if (readings.length === 0) return
+  const ts = fsaaTimestamp || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const label = deviceName.textContent || 'Unknown'
+  const data = buildSessionExport(readings, stats, label, new Date(sessionStartTime))
+  const json = JSON.stringify(data, null, 2)
+
+  if (sessionFileWritable) {
+    // FSAA path — write session JSON to already-open file handle
+    await sessionFileWritable.write(json)
+    dbg(`Session written: hrm-session-${ts}.json (${readings.length} readings)`, 'ok')
+  } else {
+    // Fallback — trigger browser download
+    downloadFile(`hrm-session-${ts}.json`, json, 'application/json')
+    const finalLine = formatLogLine(new Date().toLocaleTimeString('en-GB', { hour12: false }), 'ok', `Session saved: hrm-session-${ts}.json (${readings.length} readings)`)
+    const logText = [...debugLog.querySelectorAll('.debug-entry')]
+      .map(el => el.textContent.trim())
+      .join('\n') + '\n' + finalLine
+    downloadFile(`hrm-debug-${ts}.log`, logText, 'text/plain')
+    dbg(`Session downloaded: hrm-session-${ts}.json (${readings.length} readings)`, 'ok')
+  }
+}
+
+async function onDisconnected() {
   dbg('Device disconnected', 'warn')
+  await saveFiles()
+  await closeFsaaWritables()
+
   statusPill.classList.remove('connected')
   statusText.textContent = 'Disconnected'
   heartIcon.classList.remove('beating')
@@ -943,9 +1042,15 @@ function onDisconnected() {
   btnConnect.disabled = false
   btnConnectAll.disabled = false
   deviceName.textContent = ''
+  fsaaTimestamp = null
   clearInterval(sessionTimer)
   sessionTimer = null
 }
+
+// Safety net: save if tab is closed without disconnecting
+window.addEventListener('beforeunload', () => {
+  if (readings.length > 0) saveFiles()
+})
 
 function disconnect() {
   if (device && device.gatt.connected) {
