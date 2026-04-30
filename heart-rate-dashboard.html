@@ -361,8 +361,6 @@
 
   .chart-wrap canvas {
     display: block;
-    width: 100% !important;
-    height: 100% !important;
   }
 
   .chart-placeholder {
@@ -599,7 +597,10 @@
     <div id="debug-panel">
       <div class="debug-header">
         <span>Debug Log</span>
-        <button id="btn-clear-log" class="debug-clear">Clear</button>
+        <div style="display:flex;gap:6px">
+          <button id="btn-simulate" class="debug-clear">▶ Simulate</button>
+          <button id="btn-clear-log" class="debug-clear">Clear</button>
+        </div>
       </div>
       <div id="debug-log"></div>
     </div>
@@ -790,6 +791,7 @@ const chartPlaceholder = document.getElementById('chart-placeholder')
 const noBlebanner   = document.getElementById('no-ble-banner')
 const debugLog      = document.getElementById('debug-log')
 const btnClearLog   = document.getElementById('btn-clear-log')
+const btnSimulate   = document.getElementById('btn-simulate')
 
 // ── File System Access API ─────────────────────────────────────────────────
 async function initFsaa(deviceLabel) {
@@ -839,6 +841,30 @@ function dbg(msg, type = 'info') {
 }
 
 btnClearLog.addEventListener('click', () => { debugLog.innerHTML = '' })
+
+// ── Simulate ───────────────────────────────────────────────────────────────
+let simulateTimer = null
+
+btnSimulate.addEventListener('click', () => {
+  if (simulateTimer) {
+    clearInterval(simulateTimer)
+    simulateTimer = null
+    btnSimulate.textContent = '▶ Simulate'
+    dbg('Simulation stopped', 'warn')
+    return
+  }
+
+  dbg('Simulation started — injecting fake BPM every second', 'info')
+  btnSimulate.textContent = '■ Stop'
+
+  let baseBpm = 72
+  simulateTimer = setInterval(() => {
+    // Walk BPM up and down in a realistic pattern
+    baseBpm += Math.round((Math.random() - 0.48) * 4)
+    baseBpm = Math.max(55, Math.min(175, baseBpm))
+    onBpmReading(baseBpm)
+  }, 1000)
+})
 
 // ── BLE support check ──────────────────────────────────────────────────────
 if (!navigator.bluetooth) {
