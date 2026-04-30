@@ -107,6 +107,27 @@ The dashboard colour-codes your BPM based on standard training zones:
 
 ---
 
+## Live BPM Graph
+
+The graph shows your full session from the moment the first reading arrives. The x-axis is anchored at the session start and grows rightward — you always see the complete picture.
+
+### Zooming and panning
+
+| Interaction | Action |
+|---|---|
+| Click once | Set first boundary (red dashed line appears) |
+| Click again | Zoom to the range between the two clicks |
+| Click and drag | Zoom into the dragged region |
+| Scroll wheel | Zoom in / out smoothly |
+| Pinch (touch) | Zoom in / out |
+| Ctrl + drag | Pan left / right |
+| Escape | Cancel a pending first-click anchor |
+| **Reset Zoom** button | Return to full session view |
+
+The zoom and pan are restricted to the x-axis only — the y-axis (BPM range) always auto-fits to the visible data.
+
+---
+
 ## The Floating BPM Window
 
 Click **Float BPM** in the top-right of the dashboard to open a small always-on-top panel showing just your current BPM. You can drag it anywhere on the screen so it sits alongside whatever you're working on. Click ✕ or Float BPM again to close it.

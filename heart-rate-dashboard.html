@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -610,11 +612,7 @@
   <div class="right-panel">
     <div class="chart-header">
       <div class="chart-title">Live BPM Graph</div>
-      <div class="range-buttons">
-        <button class="range-btn active" data-range="60">1 min</button>
-        <button class="range-btn" data-range="300">5 min</button>
-        <button class="range-btn" data-range="600">10 min</button>
-      </div>
+      <button class="range-btn" id="btn-reset-zoom">Reset Zoom</button>
     </div>
     <div class="chart-wrap">
       <div class="chart-placeholder" id="chart-placeholder">
@@ -678,10 +676,7 @@ function formatDuration(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function filterReadings(readings, rangeSeconds) {
-  const cutoff = Date.now() - rangeSeconds * 1000
-  return readings.filter(r => r.ts.getTime() >= cutoff)
-}
+
 
 function buildChartConfig() {
   return {
@@ -710,6 +705,15 @@ function buildChartConfig() {
         titleColor: '#64748b',
         bodyColor: '#e2e8f0',
         callbacks: { label: ctx => `${ctx.parsed.y} bpm` },
+      },
+      zoom: {
+        pan:  { enabled: true, mode: 'x', modifierKey: 'ctrl' },
+        zoom: {
+          wheel: { enabled: true },
+          pinch: { enabled: true },
+          drag:  { enabled: true, backgroundColor: 'rgba(255,61,90,0.1)', borderColor: '#ff3d5a', borderWidth: 1 },
+          mode: 'x',
+        },
       },
     },
   }
@@ -755,10 +759,10 @@ function downloadFile(filename, content, mimeType) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 let readings = []
-let stats = { max: null, min: null, sum: 0, count: 0, avg: null }
+let stats    = { max: null, min: null, sum: 0, count: 0, avg: null }
+let zoomAnchor = null  // index of first click for two-point zoom; null when no anchor set
 let sessionStartTime = null
 let sessionTimer = null
-let activeRange = 60
 let chart = null
 let device = null
 let characteristic = null
@@ -887,6 +891,24 @@ function initChart() {
   gradient.addColorStop(0, 'rgba(255,61,90,0.35)')
   gradient.addColorStop(1, 'rgba(255,61,90,0)')
 
+  Chart.register({
+    id: 'anchorLine',
+    afterDraw(c) {
+      if (zoomAnchor === null) return
+      const { ctx: c2d, chartArea, scales: { x } } = c
+      const px = x.getPixelForValue(zoomAnchor)
+      c2d.save()
+      c2d.beginPath()
+      c2d.setLineDash([5, 4])
+      c2d.strokeStyle = '#ff3d5a'
+      c2d.lineWidth = 1.5
+      c2d.moveTo(px, chartArea.top)
+      c2d.lineTo(px, chartArea.bottom)
+      c2d.stroke()
+      c2d.restore()
+    }
+  })
+
   chart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -904,13 +926,43 @@ function initChart() {
     },
     options: buildChartConfig(),
   })
+
+  // Two-point click zoom
+  let dragMoved = false
+  canvas.addEventListener('mousedown', () => { dragMoved = false })
+  canvas.addEventListener('mousemove', () => { dragMoved = true })
+  canvas.addEventListener('click', e => {
+    if (dragMoved || !readings.length) return
+    const rect  = canvas.getBoundingClientRect()
+    const index = Math.round(chart.scales.x.getValueForPixel(e.clientX - rect.left))
+    const clamped = Math.max(0, Math.min(readings.length - 1, index))
+    if (zoomAnchor === null) {
+      zoomAnchor = clamped
+      canvas.style.cursor = 'crosshair'
+      chart.draw()
+    } else {
+      const lo = Math.min(zoomAnchor, clamped)
+      const hi = Math.max(zoomAnchor, clamped)
+      if (lo !== hi) chart.zoomScale('x', { min: lo, max: hi }, 'default')
+      zoomAnchor = null
+      canvas.style.cursor = ''
+      chart.draw()
+    }
+  })
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && zoomAnchor !== null) {
+      zoomAnchor = null
+      canvas.style.cursor = ''
+      if (chart) chart.draw()
+    }
+  })
 }
 
 function updateChart() {
   if (!chart) return
-  const visible = filterReadings(readings, activeRange)
-  const labels = visible.map(r => formatTime(r.ts))
-  const data   = visible.map(r => r.bpm)
+  const labels = readings.map(r => formatTime(r.ts))
+  const data   = readings.map(r => r.bpm)
 
   const bpms = data.length ? data : [0]
   const yMin = Math.max(0, Math.min(...bpms) - 15)
@@ -1113,14 +1165,12 @@ btnConnectAll.addEventListener('click', () => {
   }
 })
 
-// Range buttons
-document.querySelectorAll('.range-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'))
-    btn.classList.add('active')
-    activeRange = Number(btn.dataset.range)
-    updateChart()
-  })
+// Reset zoom — also clears any pending two-point anchor
+document.getElementById('btn-reset-zoom').addEventListener('click', () => {
+  zoomAnchor = null
+  const canvas = document.getElementById('bpm-chart')
+  canvas.style.cursor = ''
+  if (chart) { chart.resetZoom(); chart.draw() }
 })
 
 // Float BPM toggle

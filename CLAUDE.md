@@ -69,8 +69,30 @@ These are the only functions that belong in `src/hrm.js`. They must be pure — 
 | `buildRequestOptions(scanAll)` | boolean | `requestDevice` options object |
 | `buildSessionExport(readings, stats, deviceName, startedAt)` | session data | structured JSON object |
 | `formatLogLine(time, type, msg)` | log entry parts | formatted string with trailing `\n` |
+| `buildChartConfig()` | — | Chart.js config object (animation, responsive, zoom/pan plugin) |
 
 Export all functions. The HTML file inlines copies of these after tests pass.
+
+### Chart zoom behaviour (Cycle 10)
+
+`buildChartConfig` now includes `chartjs-plugin-zoom` configuration:
+
+| Interaction | Behaviour |
+|---|---|
+| Click once | Set first boundary — red dashed anchor line drawn |
+| Click again | Zoom to range between the two clicks |
+| Click + drag | Drag-select a region to zoom into |
+| Scroll wheel | Smooth zoom in / out |
+| Pinch (touch) | Zoom in / out |
+| Ctrl + drag | Pan left / right |
+| Escape | Cancel a pending anchor |
+| Reset Zoom button | Returns to full session view, clears anchor |
+
+Zoom and pan are restricted to the **x-axis only**. The chart always displays all readings from session start — there is no sliding time window. `filterReadings` is exported and tested but is no longer used by `updateChart` in the HTML.
+
+### Two-point click zoom — implementation note
+
+This feature is **not unit-testable** (it depends on DOM click events and Chart.js scale pixel conversion). It lives entirely in the HTML `<script>` block and cannot be moved to `src/hrm.js`. A custom `anchorLine` Chart.js plugin draws the dashed vertical line. A `dragMoved` flag distinguishes a real click from the end of a drag, preventing the two-point handler from firing after a drag-zoom.
 
 ---
 

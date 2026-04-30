@@ -41,11 +41,6 @@ export function formatDuration(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-// Cycle 5 — filterReadings
-export function filterReadings(readings, rangeSeconds) {
-  const cutoff = Date.now() - rangeSeconds * 1000
-  return readings.filter(r => r.ts.getTime() >= cutoff)
-}
 
 // Cycle 6 — buildRequestOptions
 export function buildRequestOptions(scanAll) {
@@ -83,6 +78,15 @@ export function buildChartConfig() {
         titleColor: '#64748b',
         bodyColor: '#e2e8f0',
         callbacks: { label: ctx => `${ctx.parsed.y} bpm` },
+      },
+      zoom: {
+        pan:  { enabled: true, mode: 'x', modifierKey: 'ctrl' },
+        zoom: {
+          wheel: { enabled: true },
+          pinch: { enabled: true },
+          drag:  { enabled: true, backgroundColor: 'rgba(255,61,90,0.1)', borderColor: '#ff3d5a', borderWidth: 1 },
+          mode: 'x',
+        },
       },
     },
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseBpm, getZone, updateStats, formatDuration, filterReadings, buildRequestOptions, buildSessionExport, formatLogLine, buildChartConfig } from './hrm.js'
+import { parseBpm, getZone, updateStats, formatDuration, buildRequestOptions, buildSessionExport, formatLogLine, buildChartConfig } from './hrm.js'
 
 // Cycle 1 — parseBpm
 describe('parseBpm', () => {
@@ -117,41 +117,7 @@ describe('formatDuration', () => {
   })
 })
 
-// Cycle 5 — filterReadings
-describe('filterReadings', () => {
-  it('filters readings outside the range window', () => {
-    const now = Date.now()
-    const readings = [
-      { bpm: 70, ts: new Date(now - 90000) }, // 90s ago — outside 1 min
-      { bpm: 80, ts: new Date(now - 30000) }, // 30s ago — inside 1 min
-      { bpm: 90, ts: new Date(now - 5000) },  // 5s ago — inside 1 min
-    ]
-    const result = filterReadings(readings, 60)
-    expect(result.length).toBe(2)
-    expect(result[0].bpm).toBe(80)
-  })
 
-  it('returns all readings when range covers all timestamps', () => {
-    const now = Date.now()
-    const readings = [
-      { bpm: 70, ts: new Date(now - 30000) },
-      { bpm: 80, ts: new Date(now - 10000) },
-    ]
-    expect(filterReadings(readings, 60).length).toBe(2)
-  })
-
-  it('returns empty array when all readings are outside range', () => {
-    const now = Date.now()
-    const readings = [
-      { bpm: 70, ts: new Date(now - 120000) },
-    ]
-    expect(filterReadings(readings, 60).length).toBe(0)
-  })
-
-  it('returns empty array for empty input', () => {
-    expect(filterReadings([], 60)).toEqual([])
-  })
-})
 
 // Cycle 6 — buildRequestOptions
 describe('buildRequestOptions', () => {
@@ -264,5 +230,31 @@ describe('buildChartConfig', () => {
 
   it('hides the legend', () => {
     expect(buildChartConfig().plugins.legend.display).toBe(false)
+  })
+
+  // Cycle 10 — zoom plugin
+  it('enables drag-to-zoom so the user can select a region on the chart', () => {
+    expect(buildChartConfig().plugins.zoom.zoom.drag.enabled).toBe(true)
+  })
+
+  it('enables scroll-wheel zoom', () => {
+    expect(buildChartConfig().plugins.zoom.zoom.wheel.enabled).toBe(true)
+  })
+
+  it('enables pinch zoom for touch devices', () => {
+    expect(buildChartConfig().plugins.zoom.zoom.pinch.enabled).toBe(true)
+  })
+
+  it('restricts zoom to x axis only so y scale stays fixed', () => {
+    expect(buildChartConfig().plugins.zoom.zoom.mode).toBe('x')
+  })
+
+  it('enables pan with ctrl modifier to avoid conflicting with drag-to-zoom', () => {
+    expect(buildChartConfig().plugins.zoom.pan.enabled).toBe(true)
+    expect(buildChartConfig().plugins.zoom.pan.modifierKey).toBe('ctrl')
+  })
+
+  it('restricts pan to x axis only', () => {
+    expect(buildChartConfig().plugins.zoom.pan.mode).toBe('x')
   })
 })
