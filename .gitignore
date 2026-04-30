@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Local editor/tool settings
+.claude/
+
+# OS junk
+.DS_Store
+Thumbs.db
