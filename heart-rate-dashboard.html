@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -355,7 +355,7 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 20px;
-    height: 420px;
+    min-height: 300px;
     position: relative;
   }
 
@@ -878,9 +878,12 @@ if (!navigator.bluetooth) {
 
 // ── Chart setup ────────────────────────────────────────────────────────────
 function initChart() {
-  const ctx = document.getElementById('bpm-chart').getContext('2d')
+  const canvas = document.getElementById('bpm-chart')
+  const wrap   = canvas.parentElement
+  const ctx    = canvas.getContext('2d')
 
-  const gradient = ctx.createLinearGradient(0, 0, 0, 360)
+  const h = wrap.clientHeight || 360
+  const gradient = ctx.createLinearGradient(0, 0, 0, h)
   gradient.addColorStop(0, 'rgba(255,61,90,0.35)')
   gradient.addColorStop(1, 'rgba(255,61,90,0)')
 
