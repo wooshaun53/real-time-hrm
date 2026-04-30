@@ -55,6 +55,39 @@ export function buildRequestOptions(scanAll) {
   return { filters: [{ services: ['heart_rate'] }] }
 }
 
+// Cycle 9 — buildChartConfig
+export function buildChartConfig() {
+  return {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { intersect: false },
+    scales: {
+      x: {
+        ticks: { color: '#64748b', font: { family: 'Space Mono', size: 10 }, maxTicksLimit: 8, maxRotation: 0 },
+        grid: { color: 'rgba(255,255,255,0.04)' },
+      },
+      y: {
+        ticks: { color: '#64748b', font: { family: 'Space Mono', size: 10 } },
+        grid: { color: 'rgba(255,255,255,0.04)' },
+      },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(18,18,26,0.9)',
+        borderColor: '#1e1e2e',
+        borderWidth: 1,
+        titleFont: { family: 'Space Mono', size: 11 },
+        bodyFont: { family: 'Space Mono', size: 13 },
+        titleColor: '#64748b',
+        bodyColor: '#e2e8f0',
+        callbacks: { label: ctx => `${ctx.parsed.y} bpm` },
+      },
+    },
+  }
+}
+
 // Cycle 8 — formatLogLine
 export function formatLogLine(time, type, msg) {
   return `[${time}] [${type}] ${msg}\n`

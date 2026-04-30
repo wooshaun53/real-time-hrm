@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseBpm, getZone, updateStats, formatDuration, filterReadings, buildRequestOptions, buildSessionExport, formatLogLine } from './hrm.js'
+import { parseBpm, getZone, updateStats, formatDuration, filterReadings, buildRequestOptions, buildSessionExport, formatLogLine, buildChartConfig } from './hrm.js'
 
 // Cycle 1 — parseBpm
 describe('parseBpm', () => {
@@ -239,5 +239,30 @@ describe('formatLogLine', () => {
   it('ends with a newline so entries stack correctly in the file', () => {
     const line = formatLogLine('10:00:00', 'info', 'test')
     expect(line.endsWith('\n')).toBe(true)
+  })
+})
+
+// Cycle 9 — buildChartConfig
+describe('buildChartConfig', () => {
+  it('disables animation so re-renders are immediate', () => {
+    expect(buildChartConfig().animation).toBe(false)
+  })
+
+  it('enables responsive so Chart.js owns the canvas dimensions', () => {
+    expect(buildChartConfig().responsive).toBe(true)
+  })
+
+  it('disables maintainAspectRatio so container height controls the canvas', () => {
+    expect(buildChartConfig().maintainAspectRatio).toBe(false)
+  })
+
+  it('does not set a height or maxHeight that would conflict with CSS sizing', () => {
+    const config = buildChartConfig()
+    expect(config.height).toBeUndefined()
+    expect(config.maxHeight).toBeUndefined()
+  })
+
+  it('hides the legend', () => {
+    expect(buildChartConfig().plugins.legend.display).toBe(false)
   })
 })
